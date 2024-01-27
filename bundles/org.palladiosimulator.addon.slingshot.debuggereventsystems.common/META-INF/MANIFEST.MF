@@ -1,0 +1,13 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Common
+Bundle-SymbolicName: org.palladiosimulator.addon.slingshot.debuggereventsystems.common
+Bundle-Version: 1.0.0.qualifier
+Export-Package: org.palladiosimulator.addon.slingshot.debuggereventsystems.common
+Bundle-Activator: org.palladiosimulator.addon.slingshot.debuggereventsystems.common.Activator
+Require-Bundle: org.eclipse.core.runtime,
+ org.eclipse.jdt.core,
+ org.eclipse.core.resources
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Automatic-Module-Name: org.palladiosimulator.addon.slingshot.debuggereventsystems.common
+Bundle-ActivationPolicy: lazy

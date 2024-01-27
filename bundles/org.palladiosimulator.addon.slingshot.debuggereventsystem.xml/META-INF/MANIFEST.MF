@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Xml
+Bundle-SymbolicName: org.palladiosimulator.addon.slingshot.debuggereventsystem.xml
+Bundle-Version: 1.0.0.qualifier
+Fragment-Host: jakarta.xml.bind;bundle-version="2.3.3"
+Import-Package: com.sun.xml.bind.v2;version="2.3.3"
+Automatic-Module-Name: org.palladiosimulator.addon.slingshot.debuggereventsystem.xml
+Bundle-RequiredExecutionEnvironment: JavaSE-17

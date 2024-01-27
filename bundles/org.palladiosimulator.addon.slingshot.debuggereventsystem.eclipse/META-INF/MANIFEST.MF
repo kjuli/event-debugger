@@ -1,0 +1,15 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Eclipse
+Bundle-SymbolicName: org.palladiosimulator.addon.slingshot.debuggereventsystem.eclipse
+Bundle-Version: 1.0.0.qualifier
+Export-Package: org.palladiosimulator.addon.slingshot.debuggereventsystem.eclipse,
+ org.palladiosimulator.addon.slingshot.debuggereventsystem.eclipse.model
+Bundle-Activator: org.palladiosimulator.addon.slingshot.debuggereventsystem.eclipse.Activator
+Require-Bundle: org.eclipse.core.runtime,
+ org.eclipse.debug.core;bundle-version="3.18.300",
+ org.eclipse.jdt.core,
+ org.palladiosimulator.addon.slingshot.debuggereventsystems
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Automatic-Module-Name: org.palladiosimulator.addon.slingshot.debuggereventsystem.eclipse
+Bundle-ActivationPolicy: lazy

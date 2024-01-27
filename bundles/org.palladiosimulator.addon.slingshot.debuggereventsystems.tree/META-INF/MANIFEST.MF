@@ -1,0 +1,11 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Tree
+Bundle-SymbolicName: org.palladiosimulator.addon.slingshot.debuggereventsystems.tree
+Bundle-Version: 1.0.0.qualifier
+Export-Package: org.palladiosimulator.addon.slingshot.debuggereventsystems.tree
+Bundle-Activator: org.palladiosimulator.addon.slingshot.debuggereventsystems.tree.Activator
+Require-Bundle: org.eclipse.core.runtime
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Automatic-Module-Name: org.palladiosimulator.addon.slingshot.debuggereventsystems.tree
+Bundle-ActivationPolicy: lazy

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension-point id="org.palladiosimulator.addon.slingshot.debuggereventsystem.consumer" name="Debug Event Consumer" schema="schema/org.palladiosimulator.addon.slingshot.debuggereventsystem.consumer.exsd"/>
+   <extension-point id="org.palladiosimulator.addon.slingshot.debuggereventsystem.eventhandlerfinder" name="Finder for Event Handlers" schema="schema/org.palladiosimulator.addon.slingshot.debuggereventsystem.eventhandlerfinder.exsd"/>
+   <extension-point id="org.palladiosimulator.addon.slingshot.debuggereventsystem.listener" name="Event Listener" schema="schema/org.palladiosimulator.addon.slingshot.debuggereventsystem.listener.exsd"/>
+
+</plugin>
