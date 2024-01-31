@@ -12,6 +12,12 @@ import org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.Constants;
 import org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.EclipseEventDebugUiPlugin;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.settings.Settings;
 
+/**
+ * This class builds the preference GUI and makes changes to the event-debugger
+ * settings when applying the preferences.
+ * 
+ * @author Julijan Katic
+ */
 public class EventDebuggerPrefPage extends FieldEditorPreferencePage implements IWorkbenchPreferencePage {
 
 	public static final String DESCRIPTION = """

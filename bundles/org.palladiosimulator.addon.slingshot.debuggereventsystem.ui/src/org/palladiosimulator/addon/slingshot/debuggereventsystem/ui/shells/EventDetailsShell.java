@@ -1,8 +1,14 @@
 package org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.shells;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
+import org.eclipse.jface.viewers.ArrayContentProvider;
+import org.eclipse.jface.viewers.TableViewer;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.MouseAdapter;
@@ -23,12 +29,31 @@ import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.swt.widgets.TableItem;
 import org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.utils.UiUtils;
+import org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.view.EventView;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.EventDebugSystem;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.cache.EventTreeNode;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.IDebugEvent;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.IDebugEventHandler;
 
 import com.google.common.base.Preconditions;
 
+/**
+ * A GUI shell for displaying detailed information about an event in a debug
+ * session.
+ * <p>
+ * This shell provides a comprehensive view of the event within a debugging
+ * session, focusing on displaying detailed information, trace data, and event
+ * handler details across multiple tabs. It is designed to aid developers in
+ * analyzing and understanding the flow and handling of events within their
+ * application, offering insights into event details, the sequence of events
+ * leading to the current state, and the handlers involved in processing the
+ * event.
+ * </p>
+ * Normally, this shell is opened when double clicking on an event in the
+ * {@link EventView}.
+ * 
+ * @author Julijan Katic
+ */
 public class EventDetailsShell extends Shell {
 	
 	private static final String EVENT_HANDLERS_TEXT = "Event Handlers";
@@ -48,14 +73,15 @@ public class EventDetailsShell extends Shell {
 	private TabItem tbiEventHandlers;
 	
 	private Composite cmpEventTrace;
+	private Composite cmpEventInformation;
 	
-	private Table tblTrace;
-	private TableColumn eventNameColumn;
-	private TableColumn eventTimeColumn;
+	private TableViewer tblTrace;
 	
 	private Table tblEventHandlers;
 	private TableColumn handlerName;
 	private TableColumn handlerStatus;
+
+	private TableViewer tblInformation;
 
 	private Label lblDetails;
 	private Button btnPreviousEvent;
@@ -63,6 +89,7 @@ public class EventDetailsShell extends Shell {
 	private Button btnRestartSystemFromHere;
 	
 	private IDebugEvent currentEvent;
+	private Map<String, Object> information;
 	
 	private boolean isOpened;
 	
@@ -76,14 +103,37 @@ public class EventDetailsShell extends Shell {
 		layout.marginWidth = insetX;
 		layout.marginHeight = insetY;
 		setLayout(layout);
+		setText("Event Details");
 		
 		createContents();
 	}
 	
 	public void setEvent(final IDebugEvent event) {
 		currentEvent = event;
+
+		setText("Event Details: " + event.getName());
 		
 		setEventName(event.getName());
+		information = new HashMap<>();
+
+		information.put("ID", event.getId());
+		information.put("Event Time", event.getTimeInformation().getTime());
+		information.put("Event Type", event.getEventType());
+
+		if (event.getMetaInformation() != null) {
+			event.getMetaInformation().forEach((key, value) -> {
+				if (!key.startsWith(".")) {
+					information.put(key, value);
+				}
+			});
+		}
+
+		tblInformation.setInput(information.entrySet());
+		tblInformation.refresh();
+
+		final List<ParentNode> parents = getParents();
+		tblTrace.setInput(parents);
+		tblTrace.refresh();
 		// addEventHandler(EventHolder.getHandlerBy(event.getId()));
 	}
 	
@@ -95,22 +145,32 @@ public class EventDetailsShell extends Shell {
 		lblEventName.setText(name);
 	}
 	
-	public void addEventTracePoint(final IDebugEvent event) {
-		final TableItem item = new TableItem(tblTrace, SWT.NONE);
-		item.setText(new String[] { event.getName(), Double.toString(event.getTimeInformation().getTime()) });
-	}
-	
 	public void addEventHandler(final Collection<IDebugEventHandler> handlers) {
 		for (final IDebugEventHandler handler : handlers) {
 			Preconditions.checkArgument(handler.ofEvent().equals(currentEvent.getId()),
-					"The handler must be from the event");
+					"The handler " + handler.getId() + " must have the same event " + currentEvent.getId() + ", but is "
+							+ handler.ofEvent());
 
 			final TableItem item = new TableItem(tblEventHandlers, SWT.NONE);
 			item.setText(new String[] { handler.getName(), handler.getStatus().toString() });
 		}
 	}
 	
-	
+	private List<ParentNode> getParents() {
+		final List<ParentNode> result = new ArrayList<>(10);
+		final List<EventTreeNode> tree = EventDebugSystem.getEventTree().getLatestParents(currentEvent.getId(), 10);
+		for (final EventTreeNode treeNode : tree) {
+			final Optional<IDebugEvent> debuggedEvent = EventDebugSystem.getEventHolder().getCachedEvent(treeNode.debuggedEvent());
+			final Optional<IDebugEventHandler> handler = EventDebugSystem.getEventHolder()
+					.getCachedHandler(treeNode.handler());
+			
+			if (debuggedEvent.isPresent() && handler.isPresent()) {
+				result.add(new ParentNode(debuggedEvent.get(), handler.get()));
+			}
+		}
+
+		return result;
+	}
 
 	/* *******************************************  */
 	/* 			Widget and Form creation 			*/
@@ -140,13 +200,28 @@ public class EventDetailsShell extends Shell {
 		this.createBtnRestartSystemFromHere();
 		this.createTabFolder();
 		this.createTbiInformation();
+		this.createTblInformation();
 		this.createTbiEventTrace();
 		this.createTbiEventHandlers();
 		this.createTblTrace();
-		cmpEventTrace.addControlListener(getTableResizer(tblTrace, List.of(eventNameColumn, eventTimeColumn)));
+		// cmpEventTrace.addControlListener(getTableResizer(tblTrace,
+		// List.of(eventNameColumn, eventTimeColumn)));
 		this.createLblDetails();
 	}
 	
+	private void createTblInformation() {
+		tblInformation = UiUtils.createTableViewer(cmpEventInformation, List.of(
+				new UiUtils.ColumnConverter("Key", 500,
+						entry -> ((Map.Entry<String, Object>) entry).getKey()),
+				new UiUtils.ColumnConverter("Value", 500,
+						entry -> ((Map.Entry<String, Object>) entry).getValue().toString())),
+				null);
+
+
+		tblInformation.setContentProvider(ArrayContentProvider.getInstance());
+
+	}
+
 	private void createTbiEventTrace() {
 		tbiEventTrace = new TabItem(tbfInformation, SWT.NONE);
 		tbiEventTrace.setText(TRACE_TEXT);
@@ -196,21 +271,17 @@ public class EventDetailsShell extends Shell {
 	}
 	
 	private void createTblTrace() {
-		tblTrace = new Table(cmpEventTrace, SWT.V_SCROLL | SWT.BORDER);
-		tblTrace.setHeaderVisible(true);
-		tblTrace.setLinesVisible(true);
-		
-		eventNameColumn = new TableColumn(tblTrace, SWT.NONE);
-		eventNameColumn.setText("Event");
-		eventNameColumn.setWidth(400);
-		
-		eventTimeColumn = new TableColumn(tblTrace, SWT.NONE);
-		eventTimeColumn.setText("Time");
-		eventNameColumn.setWidth(100);
-		
-		
+		tblTrace = UiUtils.createTableViewer(cmpEventTrace,
+				List.of(
+						new UiUtils.ColumnConverter("Name", 600, e -> ((ParentNode) e).event().getName()),
+						new UiUtils.ColumnConverter("From", 600, e -> ((ParentNode) e).byHandler().getName())),
+				null);
+		tblTrace.setContentProvider(ArrayContentProvider.getInstance());
 	}
 	
+	private static record ParentNode(IDebugEvent event, IDebugEventHandler byHandler) {
+	}
+
 	private void createLblEventName() {
 		lblEventName = new Label(this, SWT.NONE);
 		UiUtils.setFontSize(lblEventName, 16);
@@ -235,19 +306,17 @@ public class EventDetailsShell extends Shell {
 	private void createTbiInformation() {
 		tbiEventInformation = new TabItem(tbfInformation, SWT.NONE);
 		tbiEventInformation.setText(INFORMATION_TEXT);
-		final Composite comp = new Composite(tbfInformation, SWT.NONE);
-		comp.setLayout(new FillLayout());
+		cmpEventInformation = new Composite(tbfInformation, SWT.NONE);
+		cmpEventInformation.setLayout(new FillLayout());
 		// comp.addControlListener(tableResizer);
 
-		tbiEventInformation.setControl(comp);
+		tbiEventInformation.setControl(cmpEventInformation);
 
-		final Label exampleLabel = new Label(comp, SWT.NONE);
-		exampleLabel.setText("Here, future information about the event will be placed");
 	}
 	
 	private void createLblDetails() {
 		lblDetails = new Label(this, SWT.NONE);
-		lblDetails.setText("Currently, no details available");
+		lblDetails.setText("");
 		
 		final Point size = lblDetails.computeSize(SWT.DEFAULT, SWT.DEFAULT);
 
@@ -269,7 +338,7 @@ public class EventDetailsShell extends Shell {
 		
 		UiUtils.formLayout()
 			   .setLeft(0, 0)
-				.setBottom(100, 0)
+				.setBottom(100, 500)
 			   .attach(btnPreviousEvent);
 	}
 	
@@ -278,7 +347,7 @@ public class EventDetailsShell extends Shell {
 		btnNextEvent.setText(NEXT_EVENT_TEXT);
 		
 		UiUtils.formLayout()
-				.setRight(100, 0).setBottom(100, 0)
+				.setRight(100, 0).setBottom(100, 500)
 			   .attach(btnNextEvent);
 	}
 	
@@ -296,7 +365,7 @@ public class EventDetailsShell extends Shell {
 		
 		UiUtils.formLayout()
 			   .setRight(btnNextEvent)
-				.setBottom(100, 0)
+				.setBottom(100, 500)
 			   .attach(btnRestartSystemFromHere);
 	}
 	
@@ -321,19 +390,21 @@ public class EventDetailsShell extends Shell {
 			}
 
 			final Point oldSize = tbl.getSize();
-
+			int sum = 0;
 			if (oldSize.x > area.width) {
-				for (int i = 0; i < columns.size() - 1 && i < 3; ++i) {
-					columns.get(i).setWidth(width / 3);
+				for (int i = 0; i < columns.size() - 1; ++i) {
+					columns.get(i).setWidth(width / columns.size());
+					sum += columns.get(i).getWidth();
 				}
-				columns.get(columns.size() - 1).setWidth(width - eventNameColumn.getWidth());
+				columns.get(columns.size() - 1).setWidth(width - sum);
 				tbl.setSize(area.width, area.height);
 			} else {
 				tbl.setSize(area.width, area.height);
-				for (int i = 0; i < columns.size() - 1 && i < 3; ++i) {
-					columns.get(i).setWidth(width / 3);
+				for (int i = 0; i < columns.size() - 1; ++i) {
+					columns.get(i).setWidth(width / columns.size());
+					sum += columns.get(i).getWidth();
 				}
-				columns.get(columns.size() - 1).setWidth(width - eventNameColumn.getWidth());
+				columns.get(columns.size() - 1).setWidth(width - sum);
 			}
 		});
 	}

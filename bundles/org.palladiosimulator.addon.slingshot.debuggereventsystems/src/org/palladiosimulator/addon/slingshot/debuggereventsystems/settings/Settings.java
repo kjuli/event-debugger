@@ -2,6 +2,17 @@ package org.palladiosimulator.addon.slingshot.debuggereventsystems.settings;
 
 import java.io.Serializable;
 
+/**
+ * Class to maintain the settings of the application.
+ * <p>
+ * The front-end should use this class to save preferences and settings, or to
+ * display them to the user.
+ * <p>
+ * The back-end can use this information to make certain adjustments, for
+ * example to cache only a certain amount of events.
+ * 
+ * @author Julijan Katic
+ */
 public class Settings implements Serializable {
 
 	private String eventOutputFile = "";

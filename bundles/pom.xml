@@ -10,5 +10,9 @@
   
   <modules>
   	<module>org.palladiosimulator.addon.slingshot.debuggereventsystems</module>
+  	<module>org.palladiosimulator.addon.slingshot.debuggereventsystems.ui</module>
+  	<module>org.palladiosimulator.addon.slingshot.debuggereventsystems.xml</module>
+  	<module>org.palladiosimulator.addon.slingshot.debuggereventsystems.eclipse</module>
+  	<module>org.palladiosimulator.addon.slingshot.debuggereventsystems.common</module>
   </modules>
 </project>

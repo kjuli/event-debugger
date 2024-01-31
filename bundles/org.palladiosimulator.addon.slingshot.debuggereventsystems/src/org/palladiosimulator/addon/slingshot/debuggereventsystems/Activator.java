@@ -39,6 +39,11 @@ public class Activator extends AbstractUIPlugin {
 		super.stop(context);
 	}
 
+	/**
+	 * Returns the newly added
+	 * 
+	 * @return
+	 */
 	public EventDebugSystem getDefaultInstance() {
 		return system;
 	}

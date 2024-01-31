@@ -69,11 +69,5 @@
             class="org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.preferences.EventDebuggerPrefPageInitializer">
       </initializer>
    </extension>
-   <extension
-         point="org.palladiosimulator.addon.slingshot.debuggereventsystem.consumer">
-      <consumer
-            class="org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.view.EventViewFactory:org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.view.EventView">
-      </consumer>
-   </extension>
 
 </plugin>

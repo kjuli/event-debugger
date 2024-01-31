@@ -7,6 +7,13 @@ import org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.Constants;
 import org.palladiosimulator.addon.slingshot.debuggereventsystem.ui.EclipseEventDebugUiPlugin;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.EventDebugSystem;
 
+/**
+ * If the preferences where not set before, then this initializes the
+ * preferences with default settings.
+ * 
+ * @author Julijan Katic
+ * @see Constants#Preferences
+ */
 public class EventDebuggerPrefPageInitializer extends AbstractPreferenceInitializer {
 
 	@Override
@@ -20,6 +27,7 @@ public class EventDebuggerPrefPageInitializer extends AbstractPreferenceInitiali
 		scopedPreferenceStore.setDefault(Constants.Preference.PORT, EventDebugSystem.getSettings().getPort());
 		scopedPreferenceStore.setDefault(Constants.Preference.PATH,
 				EventDebugSystem.getSettings().getEventOutputFile());
+		scopedPreferenceStore.setDefault(Constants.Preference.PREFERENCE_ACTIVATE_DEBUGGER, true);
 	}
 
 }

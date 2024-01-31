@@ -15,6 +15,30 @@ import org.palladiosimulator.addon.slingshot.debuggereventsystems.EventDebugSyst
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.StartEventFromHereListener;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.StartSystemFromHereEvent;
 
+/**
+ * A listener for Eclipse debug events that integrates with a custom
+ * event-debugger.
+ * <p>
+ * This class listens for debug events within the Eclipse IDE and interacts with
+ * a custom event-debugger to facilitate advanced debugging scenarios. It
+ * manages the lifecycle of the event-debugger alongside the standard Eclipse
+ * debugger, ensuring that both are started and stopped synchronously.
+ * Additionally, it implements logic to handle specific debugging actions such
+ * as step-over or step-into, ensuring that execution resumes past middleware or
+ * boilerplate code when an event-handler method is exited.
+ * </p>
+ * 
+ * <p>
+ * Key features include listening for the start and termination of the debugger,
+ * managing breakpoints related to event handlers, and supporting a
+ * {@link StartSystemFromHereEvent} which allows users to specify that execution
+ * should continue from a particular event. This is needed here in order to
+ * resume the paused thread (otherwise, the replay would not work).
+ * </p>
+ * 
+ * 
+ * @author Julijan Katic
+ */
 public class EclipseDebugEventListener implements IDebugEventSetListener, StartEventFromHereListener {
 
 	private final Map<IJavaThread, Integer> lastSizes = new HashMap<>();
@@ -26,7 +50,6 @@ public class EclipseDebugEventListener implements IDebugEventSetListener, StartE
 
 	@Override
 	public void onEvent(final StartSystemFromHereEvent listenerEvent) {
-		// TODO: What if there are more than one threads?
 		if (!lastSizes.isEmpty()) {
 			final IJavaThread thread = lastSizes.entrySet().stream().findAny().get().getKey();
 			try {
@@ -43,9 +66,8 @@ public class EclipseDebugEventListener implements IDebugEventSetListener, StartE
 	public void handleDebugEvents(final DebugEvent[] events) {
 		for (final DebugEvent event : events) {
 			if (event.getKind() == DebugEvent.CREATE && event.getSource() instanceof final JDIDebugTarget target) {
-				//System.out.println("The event object type after CREATE is: " + event.getSource().getClass().getName());
-				System.out.println("Debug launch started: " + target.getLaunch().getLaunchConfiguration().getName());
 				abp.setActive(true);
+
 				EventDebugSystem.clear();
 				EventDebugSystem.listenToDebugEvents();
 			} else if (event.getKind() == DebugEvent.SUSPEND) {
@@ -60,8 +82,6 @@ public class EclipseDebugEventListener implements IDebugEventSetListener, StartE
 
 
 	private void handleBreakpointEvent(final DebugEvent event) {
-		System.out.println("Step event about to be made for " + event.getSource().getClass().getName() + " with "
-				+ event.getDetail());
 		if (event.getSource() instanceof final IJavaThread javaThread
 				&& javaThread.isSuspended()) {
 			try {
@@ -75,9 +95,6 @@ public class EclipseDebugEventListener implements IDebugEventSetListener, StartE
 					}
 
 					final int stackSize = javaThread.getStackFrames().length;
-
-					System.out.println(
-							"Stack size was " + stackSize + " and now is " + javaThread.getStackFrames().length);
 
 					if (stackSize < lastSize) {
 						javaThread.resume();
@@ -94,21 +111,9 @@ public class EclipseDebugEventListener implements IDebugEventSetListener, StartE
 	}
 	
 	private boolean hasEventBreakpoint(final IJavaThread javaThread) {
-//		return Arrays.stream(javaThread.getBreakpoints())
-//				.peek(breakpoint -> {
-//					try {
-//						System.out.println("Breakpoint " + breakpoint.getModelIdentifier() + " has attribute "
-//								+ breakpoint.getMarker().getAttributes());
-//					} catch (final CoreException e) {
-//						// TODO Auto-generated catch block
-//						e.printStackTrace();
-//					}
-//				})
-//					 .anyMatch(breakpoint -> breakpoint.getMarker().getAttribute("isEventBp", false));
 		for (final IBreakpoint breakpoint : javaThread.getBreakpoints()) {
 			try {
 				final Map<String, Object> attributes = breakpoint.getMarker().getAttributes();
-				System.out.println("Breakpoint has following attributes: ");
 				for (final Map.Entry<String, Object> attribute : attributes.entrySet()) {
 					System.out.println("\t" + attribute.getKey() + ": " + attribute.getValue().toString());
 				}
@@ -117,7 +122,6 @@ public class EclipseDebugEventListener implements IDebugEventSetListener, StartE
 			}
 
 			if (breakpoint.getMarker().getAttribute("isEventBp", false)) {
-				System.out.println("Found it!");
 				return true;
 			}
 		}

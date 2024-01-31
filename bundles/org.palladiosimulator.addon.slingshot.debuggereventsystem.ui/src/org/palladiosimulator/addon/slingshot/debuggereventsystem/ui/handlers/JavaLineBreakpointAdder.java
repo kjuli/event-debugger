@@ -18,6 +18,21 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.debug.core.IJavaLineBreakpoint;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.common.JDTHelper;
 
+/**
+ * A listener for Java line breakpoints that identifies and marks event
+ * breakpoints.
+ * <p>
+ * This class implements the {@link IBreakpointListener} interface to listen for
+ * breakpoint additions in Java projects. When a new breakpoint is added, this
+ * class checks if the breakpoint is within an event-handler method. If so, the
+ * breakpoint is marked as a special breakpoint, known as an "event breakpoint".
+ * This distinction is important for debugging event-driven applications, as it
+ * allows developers to quickly identify breakpoints that are specifically set
+ * on event-handler methods.
+ * </p>
+ * 
+ * @author Julijan Katic
+ */
 public class JavaLineBreakpointAdder implements IBreakpointListener {
 
 	@Override
@@ -45,7 +60,6 @@ public class JavaLineBreakpointAdder implements IBreakpointListener {
 							if (visitor.isHandler) {
 								javaLineBp.getMarker().setAttribute("isEventBp", true);
 
-								// Optionally, refresh the breakpoint view to reflect the changes
 								DebugPlugin.getDefault().getBreakpointManager().fireBreakpointChanged(javaLineBp);
 							}
 						}
@@ -67,6 +81,21 @@ public class JavaLineBreakpointAdder implements IBreakpointListener {
 		// Nothing needed
 	}
 	
+	/**
+	 * Finds a {@link IType} by its name within a specific {@link IJavaProject}.
+	 * <p>
+	 * This method searches for a type by its fully qualified name within the
+	 * context of a given Java project. It returns the type if found; otherwise, it
+	 * returns null. This method is crucial for resolving the type in which a new
+	 * breakpoint has been set, facilitating the check whether the breakpoint is
+	 * within an event-handler method.
+	 * </p>
+	 * 
+	 * @param typeName The fully qualified name of the type to find.
+	 * @param project  The Java project within which to search for the type.
+	 * @return The {@link IType} found, or null if the type does not exist within
+	 *         the given project.
+	 */
 	private IType findType(final String typeName, final IJavaProject project) {
 		try {
 			final IType result = project.findType(typeName);
@@ -79,6 +108,22 @@ public class JavaLineBreakpointAdder implements IBreakpointListener {
 		return null;
 	}
 
+	/**
+	 * Finds a {@link IType} by its name across all Java projects in the workspace.
+	 * <p>
+	 * This method iterates over all Java projects in the workspace, attempting to
+	 * find a type by its fully qualified name. This is useful when the project
+	 * context of a breakpoint is not known or when the type could reside in any
+	 * project. It leverages {@link #findType(String, IJavaProject)} for each
+	 * project and returns the first match found.
+	 * </p>
+	 * 
+	 * @param typeName The fully qualified name of the type to find.
+	 * @return The {@link IType} found, or null if the type does not exist in any
+	 *         project.
+	 * 
+	 * @see #findType(String, IJavaProject)
+	 */
 	private IType findType(final String typeName) {
 		return JDTHelper.getAllJavaProjectsAsStream()
 				.map(javaProject -> findType(typeName, javaProject))
@@ -87,6 +132,20 @@ public class JavaLineBreakpointAdder implements IBreakpointListener {
 				.orElse(null);
 	}
 
+	/**
+	 * Retrieves the {@link IJavaProject} associated with a breakpoint.
+	 * <p>
+	 * This method extracts the Java project from a breakpoint's marker, which is
+	 * necessary for identifying the project context of the breakpoint. This context
+	 * is used to search for types within the correct scope and to decrease the time
+	 * needed to find the correct type of the breakpoint.
+	 * </p>
+	 * 
+	 * @param breakpoint The breakpoint for which to retrieve the associated Java
+	 *                   project.
+	 * @return The {@link IJavaProject} associated with the breakpoint, or null if
+	 *         it cannot be determined.
+	 */
 	private IJavaProject retrieveJavaProject(final IBreakpoint breakpoint) {
 		try {
 			final IMarker marker = breakpoint.getMarker();
@@ -111,6 +170,17 @@ public class JavaLineBreakpointAdder implements IBreakpointListener {
 		return null;
 	}
 
+	/**
+	 * An AST visitor that checks if a given line number falls within a method
+	 * declaration, used to identify event handlers.
+	 * <p>
+	 * This static inner class extends {@link JDTHelper.ASTVisitorWithCU} to visit
+	 * method declarations in a Java AST. It checks if the specified line number
+	 * falls within any method's line range. If so, it marks the visitation state as
+	 * having encountered an event handler. This is part of the mechanism to detect
+	 * and mark event breakpoints.
+	 * </p>
+	 */
 	private static final class MethodHandlerCheckerVisitor extends JDTHelper.ASTVisitorWithCU {
 		private final int lineNumber;
 		private boolean isHandler = false;

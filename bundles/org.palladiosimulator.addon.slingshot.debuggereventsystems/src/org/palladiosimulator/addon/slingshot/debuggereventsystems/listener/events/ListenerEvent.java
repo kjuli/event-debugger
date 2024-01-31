@@ -1,5 +1,13 @@
 package org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events;
 
+/**
+ * A generic event for the listener system.
+ * <p>
+ * Specific events need to subtype this class in order to create custom
+ * listeners for it.
+ * 
+ * @author Julijan Katic
+ */
 public class ListenerEvent {
 
 	private final Object source;

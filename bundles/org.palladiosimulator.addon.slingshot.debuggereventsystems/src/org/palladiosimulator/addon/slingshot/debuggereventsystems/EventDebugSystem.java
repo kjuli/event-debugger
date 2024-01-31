@@ -1,42 +1,33 @@
 package org.palladiosimulator.addon.slingshot.debuggereventsystems;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
-import org.eclipse.core.runtime.CoreException;
-import org.eclipse.core.runtime.IConfigurationElement;
-import org.eclipse.core.runtime.IExtension;
-import org.eclipse.core.runtime.Platform;
-import org.osgi.framework.Bundle;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.common.ExtensionHelper;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.common.RethrowAsRuntime;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.handler.EventHandlerChecker;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.handler.EventHandlerFinder;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.cache.EventHolder;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.cache.EventTree;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.handler.StaticEventHandlerHolder;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.BreakpointEventListener;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.EventConsumer;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.EventHandlerMethodRetrieved;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.EventHandlerRetrievedListener;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.EventListener;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.ListenerHolder;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.ShowEventInformationListener;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.StartEventFromHereListener;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.SystemClearUpListener;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.consumer.EventConsumer;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.BreakpointEvent;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.DebugEventPublished;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.EventHandlerEvent;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.EventHandlerEvent.EventHandlerDetail;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.EventHandlerFound;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.ListenerEvent;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.ShowEventRequested;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.StartSystemFromHereEvent;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.events.SystemClearedUp;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.provider.EventProvider;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.listener.system.EventDebugActivationVote;
-import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.AbstractIDebugEventHandler;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.EventBreakpoint;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.IDebugEvent;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.IDebugEventHandler;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.settings.Settings;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.socket.EventDebugClient;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.socket.EventDebugServer;
@@ -46,160 +37,192 @@ import org.palladiosimulator.addon.slingshot.debuggereventsystems.socket.message
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.socket.messages.NewEventProvidedMessage;
 import org.palladiosimulator.addon.slingshot.debuggereventsystems.socket.messages.RestartSystemFromEvent;
 
+/**
+ * Provides centralized access to the Event Debug System for both front-end and
+ * back-end debug components.
+ * <p>
+ * This class is a singleton that facilitates the communication between
+ * different parts of the Eclipse IDE and the debuggee. It manages event
+ * listeners, event handlers, and settings. It is responsible for initializing,
+ * starting, and stopping the event debug system, as well as managing debug
+ * events, breakpoints, and event handlers.
+ * </p>
+ */
 public final class EventDebugSystem {
 	
-	private final List<EventBreakpoint> breakpoints = new LinkedList<>();
-	private final EventProvider providers;
-	
-	private final Map<EventHandlerType, List<EventHandlerFinder<?, ?>>> handlers = new HashMap<>();
-	private final List<EventConsumer> consumers = new LinkedList<>();
-	private final Map<Class<?>, List<EventListener>> eventListeners = new HashMap<>();
+	private final ListenerHolder listenerHolder = new ListenerHolder();
 	private final List<EventDebugActivationVote> activationVoters = new LinkedList<>();
-	private final List<EventHandlerChecker> handlerChecker = new LinkedList<>();
+	private final StaticEventHandlerHolder eventHandlerHolder = new StaticEventHandlerHolder();
 	private final Settings settings = new Settings();
 	
 	
+	private EventTree eventTree;
+	private EventHolder holder;
+
 	EventDebugSystem() {
-		providers = event -> {
-			EventDebugClient.sendMessage(NewEventProvidedMessage.fromEvent(event));
-		};
-
-		addClientEventListener(message -> {
-			if (message instanceof final NewEventProvidedMessage newEvent) {
-				consumers.forEach(c -> c.consumeEvent(newEvent.toDebugEvent()));
-			} else if (message instanceof final NewEventHandlerStarted started) {
-				callEvent(new EventHandlerEvent(started.asDebugEventHandler(), started.eventId(),
-						EventHandlerDetail.STARTED));
-			} else if (message instanceof final RestartSystemFromEvent rsfe) {
-				callEvent(new StartSystemFromHereEvent(rsfe.eventId()));
-			} else if (message instanceof final NewEventHandlerFinished hf) {
-				callEvent(new EventHandlerEvent(hf.asDebugHandler(), EventHandlerDetail.UPDATED));
-			}
-		});
-
+		addClientEventListener(new MessageToDebugEventMapper());
 	}
 	
+	/**
+	 * Initializes the listener holder and event handler holder used to store and
+	 * manage the listeners and event-handler finders.
+	 */
 	void init() {
-		ExtensionHelper.addExecutableExtensions(Constants.CONSUMER_EXTENSION_POINT_ID,
-				Constants.CONSUMER_EXTENSION_POINT_ELEMENT_NAME, Constants.CONSUMER_EXTENSION_POINT_ATTRIBUTE_NAME,
-				consumers);
-		findEventHandlerFinders();
-		findListeners();
+		listenerHolder.findListeners();
+		eventHandlerHolder.findEventHandlerFinders();
 	}
 
+	/**
+	 * Starts the socket client and possibly the socket server (if it was not
+	 * started before).
+	 */
 	public static void listenToDebugEvents() {
 		EventDebugServer.start();
 		EventDebugClient.getInstance();
 	}
 
-	public static void addEventHandlerChecker(final EventHandlerChecker checker) {
-		getDefaultInstance().handlerChecker.add(checker);
+	/**
+	 * Initializes the event holder for storing debug events.
+	 */
+	public static void initializeEventHolder() {
+		getDefaultInstance().holder = new EventHolder();
 	}
 
+	/**
+	 * Initializes the event tree for organizing debug events.
+	 */
+	public static void initializeEventTree() {
+		getDefaultInstance().eventTree = new EventTree();
+	}
+
+	/**
+	 * Retrieves the event holder.
+	 *
+	 * @return The event holder instance.
+	 */
+	public static EventHolder getEventHolder() {
+		return getDefaultInstance().holder;
+	}
+
+	/**
+	 * Retrieves the event tree.
+	 *
+	 * @return The event tree instance.
+	 */
+	public static EventTree getEventTree() {
+		return getDefaultInstance().eventTree;
+	}
+
+	/**
+	 * Retrieves the static event handler holder.
+	 *
+	 * @return The static event handler holder.
+	 */
+	public static StaticEventHandlerHolder getEventHandlerFinderHolder() {
+		return getDefaultInstance().eventHandlerHolder;
+	}
+
+	/**
+	 * Registers a client event listener.
+	 *
+	 * @param onMessage The consumer to handle incoming messages.
+	 */
 	public static void addClientEventListener(final Consumer<Message> onMessage) {
 		EventDebugClient.addListener(onMessage);
 	}
 
-	private void findEventHandlerFinders() {
-		for (final IExtension extension : ExtensionHelper.loadExtensions(Constants.HANDLER_EXTENSION_POINT_ID)) {
-			final IConfigurationElement element = ExtensionHelper.obtainConfigurationElement(extension, Constants.HANDLER_EXTENSION_POINT_ELEMENT_NAME);
-			
-			final String javaMethodTypeName = element.getAttribute(Constants.HANDLER_EXTENSION_POINT_JAVA_METHOD_TYPE);
-			final String javaEventTypeName = element.getAttribute(Constants.HANDLER_EXTENSION_POINT_JAVA_EVENT_TYPE);
-			
-			if (javaMethodTypeName != null && javaEventTypeName != null) {
-				try {
-					final Bundle bundle = Platform.getBundle(element.getContributor().getName());
-					final Class<?> javaMethodType = bundle.loadClass(javaMethodTypeName);
-					final Class<?> javaEventType = bundle.loadClass(javaEventTypeName);
-					final EventHandlerFinder<?, ?> finder = (EventHandlerFinder<?, ?>) element.createExecutableExtension(Constants.HANDLER_EXTENSION_POINT_CLASS);
-					
-					handlers.computeIfAbsent(new EventHandlerType(javaEventType, javaMethodType), eht -> new LinkedList<>())
-							.add(finder);
-				} catch (ClassNotFoundException | CoreException e) {
-					throw new RuntimeException("Could not load class in the event debugger system.", e);
-				}
-			}
-		}
-	}
 
-	private void findListeners() {
-		for (final IExtension extension : ExtensionHelper.loadExtensions(Constants.LISTENER_EXTENSION_POINT_ID)) {
-			final IConfigurationElement element = ExtensionHelper.obtainConfigurationElement(extension,
-					Constants.LISTENER_EXTENSION_POINT_ELEMENT_NAME);
-			// final String eventTypeStr =
-			// element.getAttribute(Constants.LISTENER_EXTENSION_POINT_EVENT_TYPE);
-
-			try {
-				final Class<? extends ListenerEvent> eventType = ExtensionHelper.loadClassFromElement(element,
-						Constants.LISTENER_EXTENSION_POINT_EVENT_TYPE, ListenerEvent.class,
-						RethrowAsRuntime.from(() -> "Class could not be found."),
-						RethrowAsRuntime.from(() -> "Class couldn't be cast."));
-
-				final EventListener eventListener = (EventListener) element
-						.createExecutableExtension(Constants.LISTENER_EXTENSION_POINT_CLASS);
-
-				addListener(eventType, eventListener);
-			} catch (final NumberFormatException e) {
-				throw new RuntimeException("The eventType attribute must be a number >= 0", e);
-			} catch (final CoreException e) {
-				throw new RuntimeException("Could not create event listener instance.", e);
-			}
-
-		}
-	}
-
+	/**
+	 * Adds a breakpoint.
+	 *
+	 * @param eventBreakpoint The event breakpoint to add.
+	 */
 	public static void addBreakpoint(final EventBreakpoint eventBreakpoint) {
-		getDefaultInstance().breakpoints.add(eventBreakpoint);
 		callEvent(new BreakpointEvent(eventBreakpoint, BreakpointEvent.BreakpointEventType.ADDED));
 	}
 	
+
+	/**
+	 * Registers an event consumer.
+	 *
+	 * @param consumer The event consumer to register.
+	 */
 	public static void addConsumer(final EventConsumer consumer) {
-		getDefaultInstance().consumers.add(consumer);
+		getDefaultInstance().listenerHolder.addListener(DebugEventPublished.class, consumer);
 	}
 
+	/**
+	 * Removes a breakpoint.
+	 *
+	 * @param eventBreakpoint The event breakpoint to remove.
+	 */
 	public static void removeBreakpoint(final EventBreakpoint eventBreakpoint) {
-		getDefaultInstance().breakpoints.remove(eventBreakpoint);
 		callEvent(new BreakpointEvent(eventBreakpoint, BreakpointEvent.BreakpointEventType.REMOVED));
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public static <JAVA_METHOD_TYPE, JAVA_EVENT_TYPE> List<EventHandlerFinder<JAVA_EVENT_TYPE, JAVA_METHOD_TYPE>> getEventHandlerFinders(
-			final Class<JAVA_EVENT_TYPE> javaEventType, final Class<JAVA_METHOD_TYPE> javaMethodType) {
-		final List handlers = getDefaultInstance().handlers.getOrDefault(new EventHandlerType(javaEventType, javaMethodType), Collections.emptyList());
-		return handlers;
-	}
-	
+	/**
+	 * Checks if debug is enabled based on activation voters.
+	 *
+	 * @return True if debug is enabled, false otherwise.
+	 */
 	public static boolean isDebugEnabled() {
 		return (getDefaultInstance().activationVoters.isEmpty()
 				|| getDefaultInstance().activationVoters.stream().anyMatch(voter -> voter.shouldActivateDebugger()));
 	}
-
-	//
-	// ADD LISTENER EVENTS
-	//
 	
+	/**
+	 * Registers a listener to handle "start from here" events.
+	 *
+	 * @param fromHereListener The listener to register.
+	 */
 	public static void addStartFromHereListener(final StartEventFromHereListener fromHereListener) {
 		addListener(StartSystemFromHereEvent.class, fromHereListener);
 	}
 	
+	/**
+	 * Registers a listener to display event information.
+	 *
+	 * @param listener The listener to register.
+	 */
 	public static void addShowEventInformationListener(final ShowEventInformationListener listener) {
 		addListener(ShowEventRequested.class, listener);
 	}
 	
+	/**
+	 * Registers a breakpoint event listener.
+	 *
+	 * @param listener The listener to register.
+	 */
 	public static void addBreakpointEventListener(final BreakpointEventListener listener) {
 		addListener(BreakpointEvent.class, listener);
 	}
 
+	/**
+	 * Registers a listener to handle system clear-up events.
+	 *
+	 * @param listener The listener to register.
+	 */
 	public static void addClearUpListener(final SystemClearUpListener listener) {
 		addListener(SystemClearedUp.class, listener);
 	}
 
+	/**
+	 * Registers a listener to handle event handler found events.
+	 *
+	 * @param listener The listener to register.
+	 */
 	@SuppressWarnings("unchecked")
 	public static void addEventHandlerFoundListener(final EventHandlerMethodRetrieved<?, ?> listener) {
 		addListener(EventHandlerFound.class, listener);
 	}
 	
+	/**
+	 * Registers a listener for when an event handler method is retrieved.
+	 *
+	 * @param eventType       The class of the event type.
+	 * @param methodType      The class of the method type.
+	 * @param methodRetrieved The consumer to handle the retrieved method.
+	 */
 	@SuppressWarnings("unchecked")
 	public static <E, M> void addEventHandlerFoundListener(final Class<E> eventType, final Class<M> methodType,
 			final Consumer<M> methodRetrieved) {
@@ -223,111 +246,133 @@ public final class EventDebugSystem {
 		});
 	}
 
+	/**
+	 * Registers a listener to handle event handler retrieved events.
+	 *
+	 * @param listener The listener to register.
+	 */
 	public static void addEventHandlerRetrieved(final EventHandlerRetrievedListener listener) {
 		addListener(EventHandlerEvent.class, listener);
 	}
 
+	/**
+	 * Registers an event listener for a specific type of event.
+	 *
+	 * @param eventType     The class of the event type.
+	 * @param eventListener The event listener to register.
+	 */
 	public static <T extends ListenerEvent> void addListener(final Class<T> eventType,
 			final EventListener<T> eventListener) {
-		System.out.println("Add listener for " + eventType.getSimpleName() + ": " + eventListener.getClass().getName());
-		getDefaultInstance().eventListeners
-							.computeIfAbsent(eventType, et -> new LinkedList<EventListener>())
-							.add(eventListener);
+		getDefaultInstance().listenerHolder.addListener(eventType, eventListener);
 	}
 	
+	/**
+	 * Registers an activation voter.
+	 *
+	 * @param voter The activation voter to register.
+	 */
 	public static void addActivationVoter(final EventDebugActivationVote voter) {
 		getDefaultInstance().activationVoters.add(voter);
 	}
 
-	public static boolean isEventHandler(final Object isHandler) {
-		return getDefaultInstance().handlerChecker.stream().anyMatch(checker -> checker.isEventHandler(isHandler));
+	/**
+	 * Checks if the given object is an event handler.
+	 *
+	 * @param object The object to check.
+	 * @return True if the object is an event handler, false otherwise.
+	 */
+	public static boolean isEventHandler(final Object object) {
+		return getDefaultInstance().eventHandlerHolder.isEventHandler(object);
 	}
 
-	//
-	// CALLING EVENTS
-	//
-	
+	/**
+	 * Triggers a listener event.
+	 *
+	 * @param listenerEvent The event to trigger.
+	 */
 	public static void callEvent(final ListenerEvent listenerEvent) {
-		getDefaultInstance().eventListeners.entrySet().stream()
-				.filter(entry -> entry.getKey().isAssignableFrom(listenerEvent.getClass()))
-				.flatMap(entry -> entry.getValue().stream())
-							.forEach(listener -> listener.onEvent(listenerEvent));
+		getDefaultInstance().listenerHolder.callEvent(listenerEvent);
 	}
 	
+	/**
+	 * Replays the debugging process from a specified debug event.
+	 *
+	 * @param debugEvent The debug event to start from.
+	 */
 	public static void startFromHere(final IDebugEvent debugEvent) {
 		EventDebugClient.sendMessage(RestartSystemFromEvent.from(debugEvent));
 		callEvent(new StartSystemFromHereEvent(debugEvent));
 	}
 	
+	/**
+	 * Commands the front-end debugger to display runtime information for a debug
+	 * event.
+	 *
+	 * @param debugEvent The debug event for which to display information.
+	 */
 	public static void showRuntimeEventInformation(final IDebugEvent debugEvent) {
 		callEvent(new ShowEventRequested(debugEvent, 0));
 	}
 	
-	public static void pushHandler(final AbstractIDebugEventHandler abstractIDebugEventHandler) {
-		EventDebugClient.sendMessage(NewEventHandlerStarted.from(abstractIDebugEventHandler));
+	/**
+	 * Notifies that a new event handler has started processing.
+	 *
+	 * @param handler The event handler that started.
+	 */
+	public static void pushHandler(final IDebugEventHandler handler) {
+		EventDebugClient.sendMessage(NewEventHandlerStarted.from(handler));
 	}
 
-	public static <JAVA_METHOD_TYPE, JAVA_EVENT_TYPE> void findEventHandlers(final JAVA_EVENT_TYPE event,
-			final Class<? super JAVA_EVENT_TYPE> handlerType, final Class<JAVA_METHOD_TYPE> javaMethodType) {
-		findEventHandlers(event, handlerType, javaMethodType, null, null);
+	/**
+	 * Provides a new debug event to the system.
+	 *
+	 * @param event The debug event to provide.
+	 */
+	public static void provideEvent(final IDebugEvent event) {
+		EventDebugClient.sendMessage(NewEventProvidedMessage.fromEvent(event));
 	}
-	
-	public static <JAVA_METHOD_TYPE, JAVA_EVENT_TYPE> void findEventHandlers(
-			final JAVA_EVENT_TYPE event, 
-			final Class<? super JAVA_EVENT_TYPE> eventType,
-			final Class<JAVA_METHOD_TYPE> javaMethodType, 
-			final Consumer<JAVA_METHOD_TYPE> methodFound, 
-			final Runnable onCompletion) {
-		final Consumer<JAVA_METHOD_TYPE> doOnMethodFound = method -> {
-			if (methodFound != null) {
-				methodFound.accept(method);
-			}
-			callEvent(new EventHandlerFound<>(method));
-		};
-		final Runnable doOnCompletion = () -> {
-			if (onCompletion != null) {
-				onCompletion.run();
-			}
-		};
-		// final Class<JAVA_EVENT_TYPE> eventType = (Class<JAVA_EVENT_TYPE>)
-		// event.getClass();
 
-		getEventHandlerFinders(eventType, javaMethodType).stream()
-			.findAny()
-				.ifPresentOrElse(finder -> finder.retrieveMethods(event, doOnMethodFound, doOnCompletion),
-						() -> System.out.println("No finder found for " + eventType.getSimpleName() + " and "
-								+ javaMethodType.getSimpleName()));
-	}
-	
-	//
-	// PROVIDER AND INSTANCES
-	//
-	
-	public static EventProvider getEventProvider() {
-		return getDefaultInstance().providers;
-	}
-	
+	/**
+	 * Retrieves the singleton instance of the Event Debug System.
+	 *
+	 * @return The singleton instance of the Event Debug System.
+	 */
 	public static EventDebugSystem getDefaultInstance() {
 		return Activator.getDefault().getDefaultInstance();
 	}
 	
+	/**
+	 * Clears the Event Debug System.
+	 * 
+	 * @see SystemClearedUp
+	 */
 	public static void clear() {
 		callEvent(new SystemClearedUp());
 	}
 
+	/**
+	 * Closes the Event Debug Server.
+	 */
 	public static void close() {
 		EventDebugServer.closeServer();
 	}
 
-	public static void updateHandler(final AbstractIDebugEventHandler abstractIDebugEventHandler) {
-		EventDebugClient.sendMessage(NewEventHandlerFinished.from(abstractIDebugEventHandler));
+	/**
+	 * Notifies that an event handler has finished processing.
+	 *
+	 * @param handler The event handler that finished.
+	 */
+	public static void updateHandler(final IDebugEventHandler handler) {
+		EventDebugClient.sendMessage(NewEventHandlerFinished.from(handler));
 	}
 
+	/**
+	 * Retrieves the settings for the Event Debug System.
+	 *
+	 * @return The settings for the Event Debug System.
+	 */
 	public static Settings getSettings() {
 		return getDefaultInstance().settings;
-	}
-
-	private static record EventHandlerType(Class<?> javaEventType, Class<?> javaMethodType) {
 	}
 
 }

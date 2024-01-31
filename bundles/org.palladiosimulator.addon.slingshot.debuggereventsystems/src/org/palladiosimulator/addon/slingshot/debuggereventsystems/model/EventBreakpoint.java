@@ -6,6 +6,4 @@ public interface EventBreakpoint {
 	/** The *static* name of the event */
 	public String eventName();
 	
-	public boolean isEvent(final IDebugEvent target);
-	
 }
