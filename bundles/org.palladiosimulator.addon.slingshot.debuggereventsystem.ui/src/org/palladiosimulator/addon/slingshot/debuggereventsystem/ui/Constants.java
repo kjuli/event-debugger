@@ -23,5 +23,6 @@ public class Constants {
 		public static final String CACHE = "CACHE_MODE";
 		public static final String PORT = "PORT";
 		public static final String CACHE_NUM = "MAX_CACHE_NUM";
+		public static final String OUTPUT_TYPE = "OUTPUT_TYPE";
 	}
 }

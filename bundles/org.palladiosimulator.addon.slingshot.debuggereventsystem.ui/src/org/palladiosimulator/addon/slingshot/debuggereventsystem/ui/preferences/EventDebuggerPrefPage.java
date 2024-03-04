@@ -24,13 +24,20 @@ public class EventDebuggerPrefPage extends FieldEditorPreferencePage implements 
 		Change settings for the general event debug system. Here, you also can change the module\s\
 		for finding the right events.""";
 
-	private static final String[][] RADIO_SETTINGS = {
+	private static final String[][] CACHE_RADIO_SETTINGS = {
 			{ "Don't cache events", Settings.EventCacheMode.DEACTIVATED.name() },
 			{ "Cache events unboundedly (may cause performance issues)", Settings.EventCacheMode.UNBOUNDED.name() },
 			{ "Cache a maximum number of events", Settings.EventCacheMode.BOUNDED.name() }
 	};
+	
+	private static final String[][] OUTPUT_FORMAT_RADIO_SETTINGS = {
+			{ "XML", Settings.OutputFormat.XML.name() },
+			{ "GraphViz", Settings.OutputFormat.GRAPH_VIZ.name() }
+	};
 
 	private DirectoryFieldEditor directoryFE;
+	private RadioGroupFieldEditor outputSetting;
+	
 	private IntegerFieldEditor portFE;
 	private IntegerFieldEditor maxCacheNumberFE;
 	private RadioGroupFieldEditor cacheSetting;
@@ -52,7 +59,10 @@ public class EventDebuggerPrefPage extends FieldEditorPreferencePage implements 
 				getFieldEditorParent());
 		addField(directoryFE);
 
-		cacheSetting = new RadioGroupFieldEditor(Constants.Preference.CACHE, "&Cache Setting", 1, RADIO_SETTINGS,
+		outputSetting = new RadioGroupFieldEditor(Constants.Preference.OUTPUT_TYPE, "Output &Format", 2, OUTPUT_FORMAT_RADIO_SETTINGS, getFieldEditorParent());
+		addField(outputSetting);
+
+		cacheSetting = new RadioGroupFieldEditor(Constants.Preference.CACHE, "&Cache Setting", 1, CACHE_RADIO_SETTINGS,
 				getFieldEditorParent());
 		addField(cacheSetting);
 
@@ -62,7 +72,8 @@ public class EventDebuggerPrefPage extends FieldEditorPreferencePage implements 
 
 		portFE = new IntegerFieldEditor(Constants.Preference.PORT, "&Port Number", getFieldEditorParent());
 		addField(portFE);
+		
 	}
 
-
+	
 }

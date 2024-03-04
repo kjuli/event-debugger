@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.palladiosimulator.addon.slingshot</groupId>
-    <artifactId>debugger-event-system</artifactId>
+    <artifactId>debugger-event-system.root</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
   <artifactId>bundles</artifactId>

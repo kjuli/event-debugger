@@ -20,11 +20,22 @@ public class Settings implements Serializable {
 
 	private int maxCache = 10;
 	private EventCacheMode eventCacheMode = EventCacheMode.BOUNDED;
-
+	private OutputFormat outputFormat = OutputFormat.XML;
+	
 	private int port = 9865;
-
+	
+	/**
+	 * Sets whether the cache can be unbounded, bounded or deactivated.
+	 */
 	public enum EventCacheMode {
 		DEACTIVATED, BOUNDED, UNBOUNDED
+	}
+	
+	/**
+	 * Sets the output format of the event graph
+	 */
+	public enum OutputFormat {
+		XML, GRAPH_VIZ
 	}
 
 	public String getEventOutputFile() {
@@ -67,4 +78,12 @@ public class Settings implements Serializable {
 		this.port = port;
 	}
 
+	public OutputFormat getOutputFormat() {
+		return outputFormat;
+	}
+
+	public void setOutputFormat(OutputFormat outputFormat) {
+		this.outputFormat = outputFormat;
+	}
+	
 }

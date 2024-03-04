@@ -3,6 +3,11 @@
   <extension>
     <groupId>org.eclipse.tycho</groupId>
     <artifactId>tycho-build</artifactId>
-    <version>4.0.4</version>
+    <version>4.0.5</version>
   </extension>
+  <extension>
+		<groupId>org.palladiosimulator</groupId>
+		<artifactId>tycho-tp-refresh-maven-plugin</artifactId>
+		<version>0.2.6</version>
+	</extension>
 </extensions>

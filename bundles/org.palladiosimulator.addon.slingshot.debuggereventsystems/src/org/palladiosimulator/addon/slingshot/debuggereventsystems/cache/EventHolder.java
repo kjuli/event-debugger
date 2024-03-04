@@ -2,6 +2,7 @@ package org.palladiosimulator.addon.slingshot.debuggereventsystems.cache;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +34,6 @@ public class EventHolder {
 	private final Map<DebugEventId, IDebugEvent> events = new HashMap<>();
 	private final Map<HandlerId, IDebugEventHandler> handlers = new HashMap<>();
 	private final Map<DebugEventId, List<HandlerId>> eventToHandlersMap = new HashMap<>();
-
 	/**
 	 * Adds a debug event to the repository.
 	 * <p>
@@ -134,4 +134,13 @@ public class EventHolder {
 		events.remove(eventId);
 		eventToHandlersMap.remove(eventId);
 	}
+	
+	public Iterable<Map.Entry<DebugEventId, IDebugEvent>> eventIterator() {
+		return this.events.entrySet();
+	}
+	
+	public Iterable<Map.Entry<HandlerId, IDebugEventHandler>> handlerIterator() {
+		return this.handlers.entrySet();
+	}
+	
 }

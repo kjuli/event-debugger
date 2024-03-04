@@ -7,10 +7,10 @@
     <artifactId>bundles</artifactId>
     <version>0.0.1-SNAPSHOT</version>
   </parent>
-  <artifactId>org.palladiosimulator.addon.slingshot.debuggereventsystems</artifactId>
+  <artifactId>org.palladiosimulator.addon.slingshot.debuggereventsystems.common</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <packaging>eclipse-plugin</packaging>
-  <name>[bundle] Debuggereventsystems</name>
+  <name>[bundle] Common</name>
   <build>
     <sourceDirectory>src</sourceDirectory>
   </build>

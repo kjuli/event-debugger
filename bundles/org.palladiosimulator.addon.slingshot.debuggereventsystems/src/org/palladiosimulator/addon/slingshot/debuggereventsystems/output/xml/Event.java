@@ -1,13 +1,18 @@
 package org.palladiosimulator.addon.slingshot.debuggereventsystems.output.xml;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlElementWrapper;
+
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.EventDebugSystem;
+import org.palladiosimulator.addon.slingshot.debuggereventsystems.model.IDebugEvent;
 
 @XmlAccessorType(XmlAccessType.FIELD)
 public final class Event implements Serializable {
@@ -80,5 +85,29 @@ public final class Event implements Serializable {
 		this.parent = parent;
 	}
 
-
+	public static Event fromDebugEvent(final IDebugEvent event) {
+		final Event result = new Event();
+		
+		result.setId(event.getId().getId());
+		result.setName(event.getName());
+		result.setTime(event.getTimeInformation().getTime());
+		
+		final List<HandlerRef> handlers = EventDebugSystem.getEventHolder().getHandlersByEvent(event.getId())
+			.stream()
+			.map(HandlerRef::fromHandler)
+			.collect(Collectors.toList());
+		
+		result.setHandlers(handlers);
+		
+		final List<EventRef> causedBy = EventDebugSystem
+			.getEventTree()
+			.getLatestParents(event.getId(), 1)
+			.stream()
+			.map(node -> EventRef.from(node.debuggedEvent()))
+			.collect(Collectors.toList());
+		
+		result.setCausedBy(causedBy);
+		
+		return result;
+	}
 }
